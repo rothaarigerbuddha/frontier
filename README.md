@@ -185,8 +185,8 @@ What `run.sh` does:
 
 1. builds and starts the three containers (`docker compose up -d --build`),
 2. waits until the app answers on `http://localhost:8080`,
-3. if `cloudflared` is installed, opens a **Cloudflare quick tunnel** and prints a
-   public `https://<random>.trycloudflare.com` URL you can share.
+3. opens a public tunnel with the default provider (**ngrok**) and prints a
+   shareable URL. Change it with `--tunnel <provider>` (see below).
 
 Variants:
 
@@ -218,10 +218,14 @@ The app is one origin on port `8080`, so any HTTP tunnel pointed at
 `./run.sh` opens a tunnel for you; pick the provider with `--tunnel`:
 
 ```bash
-./run.sh --tunnel cloudflared     # default
-./run.sh --tunnel localhost.run   # no account, no install (just ssh)
-./run.sh --tunnel ngrok           # needs a free ngrok account
+./run.sh --tunnel ngrok           # default — needs a free ngrok account + authtoken
+./run.sh --tunnel localhost.run   # no account, no install (just ssh); ephemeral
+./run.sh --tunnel cloudflared     # blocked on some ISPs (trycloudflare SNI filtering)
 ```
+
+> Default is **ngrok** because it stays up reliably while running (unlike the
+> free localhost.run tunnel, which gets reaped) and isn't ISP-blocked here.
+> Override per-run with `--tunnel`, or set `TUNNEL_PROVIDER` in your shell.
 
 > **If the Cloudflare quick tunnel stalls** at `Requesting new quick Tunnel…`
 > (`context deadline exceeded`), your ISP is blocking `trycloudflare.com`

@@ -42,7 +42,7 @@ case "${1:-}" in
 esac
 
 TUNNEL=1
-TUNNEL_PROVIDER="${TUNNEL_PROVIDER:-cloudflared}"
+TUNNEL_PROVIDER="${TUNNEL_PROVIDER:-ngrok}"
 case "${1:-}" in
   --no-tunnel) TUNNEL=0 ;;
   --tunnel)    TUNNEL_PROVIDER="${2:-cloudflared}" ;;
