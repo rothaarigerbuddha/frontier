@@ -1,0 +1,26 @@
+# secrets / local overrides
+.env
+*.local
+
+# frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+frontend/*.tsbuildinfo
+
+# backend
+backend/**/bin/
+backend/**/obj/
+backend/**/*.user
+backend/temp/
+# runtime SQLite database — generated & seeded on first start, never committed
+backend/**/*.db
+backend/**/*.db-shm
+backend/**/*.db-wal
+
+# os / editor
+.DS_Store
+.vs/
+.idea/
+*.log

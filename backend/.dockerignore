@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/*.user
+temp/
+# never ship a prebuilt database into the image; it is generated & seeded at runtime
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.git/
+.gitignore
+.vs/

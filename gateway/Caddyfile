@@ -1,0 +1,36 @@
+# Single public entrypoint for the whole stack.
+#
+#   browser ──▶ gateway:80 ──┬─ API + images + swagger ─▶ backend:8080
+#                            └─ everything else ────────▶ frontend:3000
+#
+# Because pages, the API and images are all served from this one origin, there
+# is no CORS to configure and a single Cloudflare/ngrok tunnel exposes the whole
+# app. Caddy forwards the original Host + X-Forwarded-* headers, which Next.js
+# Server Actions rely on for their origin check.
+
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	encode gzip
+
+	# Routes owned by the .NET backend. Everything else falls through to Next.js.
+	@backend path \
+		/auth/* \
+		/posts /posts/* \
+		/uploads /uploads/* \
+		/permissions /permissions/* \
+		/roles /roles/* \
+		/users /users/* \
+		/images/* \
+		/swagger /swagger/*
+	handle @backend {
+		reverse_proxy backend:8080
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
