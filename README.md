@@ -129,6 +129,20 @@ The database is auto-created and seeded on first start (admin user + a "Hello, w
 The app is one origin on port `8080`, so any HTTP tunnel pointed at
 `http://localhost:8080` exposes the whole thing — pages, API and images.
 
+`./run.sh` opens a tunnel for you; pick the provider with `--tunnel`:
+
+```bash
+./run.sh --tunnel cloudflared     # default
+./run.sh --tunnel localhost.run   # no account, no install (just ssh)
+./run.sh --tunnel ngrok           # needs a free ngrok account
+```
+
+> **If the Cloudflare quick tunnel stalls** at `Requesting new quick Tunnel…`
+> (`context deadline exceeded`), your ISP is blocking `trycloudflare.com`
+> (common SNI filtering). Use `./run.sh --tunnel localhost.run` instead — it goes
+> over SSH and is not affected. Named Cloudflare tunnels (Option B) also work,
+> since they don't use `trycloudflare.com`.
+
 ### Option A — Cloudflare quick tunnel (zero config, instant)
 
 Already automated by `./run.sh`. To do it manually:
@@ -139,6 +153,15 @@ cloudflared tunnel --url http://localhost:8080
 
 Copy the printed `https://<something>.trycloudflare.com` URL. Good for demos; the
 URL is random and changes every run.
+
+### Option A2 — localhost.run (no account, no install)
+
+```bash
+ssh -R 80:localhost:8080 localhost.run
+```
+
+Prints a public `https://<random>.lhr.life` URL. SSH-based, so it works even where
+`trycloudflare.com` is blocked.
 
 ### Option B — Cloudflare named tunnel (stable URL / your own domain)
 

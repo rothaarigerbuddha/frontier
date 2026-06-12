@@ -42,7 +42,11 @@ case "${1:-}" in
 esac
 
 TUNNEL=1
-[ "${1:-}" = "--no-tunnel" ] && TUNNEL=0
+TUNNEL_PROVIDER="${TUNNEL_PROVIDER:-cloudflared}"
+case "${1:-}" in
+  --no-tunnel) TUNNEL=0 ;;
+  --tunnel)    TUNNEL_PROVIDER="${2:-cloudflared}" ;;
+esac
 
 # ---- build + start ---------------------------------------------------------
 info "Building and starting containers (this can take a few minutes the first time)..."
@@ -78,14 +82,36 @@ if [ "$TUNNEL" = 0 ]; then
   exit 0
 fi
 
-if ! command -v cloudflared >/dev/null 2>&1; then
-  warn "cloudflared is not installed — skipping the public tunnel."
-  warn "Install it and rerun, or expose the app yourself. See the 'Public tunnel' section in README.md."
-  warn "The app is still fully usable locally at ${LOCAL_URL}"
-  exit 0
-fi
-
-info "Opening a Cloudflare quick tunnel — share the https://*.trycloudflare.com URL printed below."
+info "Opening public tunnel via: ${c_bold}${TUNNEL_PROVIDER}${c_off}"
 info "Press Ctrl+C to close the tunnel (containers keep running; stop them with ./run.sh --down)."
 echo
-exec cloudflared tunnel --url "${LOCAL_URL}"
+
+case "$TUNNEL_PROVIDER" in
+  cloudflared)
+    command -v cloudflared >/dev/null 2>&1 || {
+      warn "cloudflared is not installed — skipping. Try: ./run.sh --tunnel localhost.run"
+      warn "The app is still fully usable locally at ${LOCAL_URL}"; exit 0; }
+    warn "If this stalls at 'Requesting new quick Tunnel', your ISP likely blocks trycloudflare.com."
+    warn "Fallback that needs no account/install: ./run.sh --tunnel localhost.run"
+    exec cloudflared tunnel --url "${LOCAL_URL}"
+    ;;
+  localhost.run|localhostrun|lhr)
+    # SSH reverse tunnel — no account, no install (ssh is already present).
+    # Prints a public https://*.lhr.life URL.
+    exec ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 \
+      -R 80:localhost:"${PORT}" localhost.run
+    ;;
+  serveo)
+    exec ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 \
+      -R 80:localhost:"${PORT}" serveo.net
+    ;;
+  ngrok)
+    command -v ngrok >/dev/null 2>&1 || {
+      warn "ngrok is not installed. Install from https://ngrok.com/download (AUR: paru -S ngrok),"
+      warn "then authenticate once: ngrok config add-authtoken <YOUR_TOKEN>"; exit 0; }
+    exec ngrok http "${PORT}"
+    ;;
+  *)
+    die "Unknown tunnel provider '${TUNNEL_PROVIDER}'. Use: cloudflared | localhost.run | ngrok | serveo"
+    ;;
+esac
