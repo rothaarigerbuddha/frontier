@@ -109,7 +109,14 @@ case "$TUNNEL_PROVIDER" in
     command -v ngrok >/dev/null 2>&1 || {
       warn "ngrok is not installed. Install from https://ngrok.com/download (AUR: paru -S ngrok),"
       warn "then authenticate once: ngrok config add-authtoken <YOUR_TOKEN>"; exit 0; }
-    exec ngrok http "${PORT}"
+    # Set NGROK_DOMAIN to your free static domain (dashboard.ngrok.com -> Domains)
+    # for a STABLE URL that survives restarts; otherwise a random URL is used.
+    if [ -n "${NGROK_DOMAIN:-}" ]; then
+      info "Using fixed ngrok domain: ${NGROK_DOMAIN}"
+      exec ngrok http --url="${NGROK_DOMAIN}" "${PORT}"
+    else
+      exec ngrok http "${PORT}"
+    fi
     ;;
   *)
     die "Unknown tunnel provider '${TUNNEL_PROVIDER}'. Use: cloudflared | localhost.run | ngrok | serveo"
