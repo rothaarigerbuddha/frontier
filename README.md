@@ -136,10 +136,26 @@ one origin. That removes CORS entirely and means a single tunnel exposes the who
 ## Prerequisites
 
 - **Docker** + **Docker Compose v2** (`docker compose`).
-- **cloudflared** *(optional)* — only for the public tunnel. `ngrok` works too.
+- **ngrok** (default tunnel) or **cloudflared** *(optional)* — only for the public tunnel.
+
+### First-time setup — `./setup.sh` (recommended)
+
+A **one-time** host-setup script. It is deliberately separate from `run.sh`
+because it makes privileged, system-wide changes — so it uses `sudo` and asks for
+your password. `run.sh` itself never touches the system; it just builds & runs the
+app as your normal user.
+
+```bash
+./setup.sh            # installs Docker + Compose + buildx + ngrok + cloudflared,
+                      # enables the Docker service, adds you to the 'docker' group
+```
+
+> After it runs, **log out and back in once** (so the `docker` group applies),
+> then use `./run.sh`. Flags: `--yes` (no prompt), `--no-ngrok`.
+> Supports pacman / apt / dnf / zypper / brew; otherwise install Docker manually below.
 
 <details>
-<summary>Install Docker</summary>
+<summary>Install Docker manually (instead of setup.sh)</summary>
 
 **Arch / CachyOS**
 ```bash
@@ -320,6 +336,19 @@ images to load.
 
 ### Установка инструментов
 
+**Проще всего — однократный `./setup.sh`** (это отдельный скрипт от `run.sh`, потому что
+делает системные изменения через `sudo`; `run.sh` сам ничего в системе не трогает):
+
+```bash
+./setup.sh            # ставит Docker + Compose + buildx + ngrok + cloudflared,
+                      # включает службу Docker, добавляет тебя в группу 'docker'
+```
+
+> После него **перелогинься** (чтобы применилась группа `docker`), затем — `./run.sh`.
+> Флаги: `--yes` (без вопросов), `--no-ngrok`. Поддерживает pacman / apt / dnf / zypper / brew.
+
+Вручную (если не используешь `setup.sh`):
+
 ```bash
 # Arch / CachyOS
 sudo pacman -S docker docker-compose docker-buildx cloudflared
@@ -424,13 +453,18 @@ docker compose down -v
 
 ```
 frontier/
+├── setup.sh                # ONE-TIME host setup (sudo): Docker + tools + group
+├── run.sh                  # everyday: build/up the stack + open a tunnel (ngrok default)
 ├── docker-compose.yml      # gateway + frontend + backend, one command
-├── run.sh                  # build/up + Cloudflare quick tunnel
 ├── .env.example
 ├── gateway/Caddyfile       # single-origin reverse proxy
 ├── frontend/               # Next.js app (+ Dockerfile)
 └── backend/                # .NET 8 solution (+ Dockerfile, entrypoint)
 ```
+
+> **`setup.sh` vs `run.sh`:** `setup.sh` is run **once per machine** and changes
+> the system (needs `sudo`). `run.sh` is what you run **every time** to launch the
+> app — it runs as your normal user and never uses `sudo`.
 
 ---
 
