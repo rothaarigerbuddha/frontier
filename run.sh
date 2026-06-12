@@ -33,7 +33,14 @@ else
   die "Docker Compose not found. Install Docker Desktop or the docker + docker-compose-plugin packages (see README.md)."
 fi
 
-docker info >/dev/null 2>&1 || die "Docker daemon is not running. Start Docker and retry."
+if ! docker info >/dev/null 2>&1; then
+  if docker info 2>&1 | grep -qiE "permission denied|dial unix"; then
+    die "Can't reach the Docker socket — this shell isn't in the 'docker' group yet.
+   Fix: log out & back in (applies it everywhere), or run 'newgrp docker' in this terminal, then retry.
+   Note: the daemon may be fine; this is a permissions issue, not a stopped daemon."
+  fi
+  die "Docker daemon is not running. Start it with: sudo systemctl start docker"
+fi
 
 # ---- subcommands -----------------------------------------------------------
 case "${1:-}" in
