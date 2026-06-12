@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
     // match for CSRF protection, so every host the app may be served under must
     // be whitelisted here, otherwise actions (login, create/update) get 403.
     serverActions: {
+      // Cover-image uploads flow through a Server Action; the default 1MB cap is
+      // too small for real images.
+      bodySizeLimit: "15mb",
       allowedOrigins: [
         "localhost:8080",
         "127.0.0.1:8080",

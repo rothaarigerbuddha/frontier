@@ -17,15 +17,7 @@
 	encode gzip
 
 	# Routes owned by the .NET backend. Everything else falls through to Next.js.
-	@backend path \
-		/auth/* \
-		/posts /posts/* \
-		/uploads /uploads/* \
-		/permissions /permissions/* \
-		/roles /roles/* \
-		/users /users/* \
-		/images/* \
-		/swagger /swagger/*
+	@backend path /auth/* /posts /posts/* /uploads /uploads/* /permissions /permissions/* /roles /roles/* /users /users/* /images/* /swagger /swagger/*
 	handle @backend {
 		reverse_proxy backend:8080
 	}
