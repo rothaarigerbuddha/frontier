@@ -47,6 +47,92 @@ one origin. That removes CORS entirely and means a single tunnel exposes the who
 
 ---
 
+## Integration changes (frontend ↔ backend)
+
+> **For the frontend & backend developers.** The two repos were built
+> independently and disagreed on a few contracts. This section lists **every**
+> change made to wire them together, file by file. Upstream business logic was
+> otherwise left untouched — the edits are deliberately minimal.
+
+### The one contract that mattered: the post `image` field
+
+- A post's `image` holds **only a filename** (e.g. `abc123.jpg`). The backend
+  saves uploads under `wwwroot/images/posts/` and serves them at
+  `/images/posts/<filename>`. The **frontend builds the display URL at render
+  time**. The frontend previously stored the *full* URL in `image`, which broke
+  portability (the host got baked into the DB) and the article page.
+
+### Frontend (`frontend/`)
+
+| File | Change | Why |
+|------|--------|-----|
+| `src/lib/axios/httpClient.ts` | API base URL now from server-only `API_INTERNAL_URL` (→ `http://backend:8080` in Docker), falling back to `NEXT_PUBLIC_API_BASE_URL` then `http://localhost:5160` | This client runs **only server-side** (reads cookies via `next/headers`); it must reach the backend over the internal network, not a browser URL |
+| `src/lib/utils.ts` (`getImageUrlFromPath`) | Returns a **relative** `/images/posts/<file>` URL by default (override with `NEXT_PUBLIC_IMAGE_BASE_URL`); tolerates already-absolute URLs and already-rooted paths | Images are fetched by the browser; a relative URL resolves against the page origin (gateway / tunnel / domain) and never hard-codes a host |
+| `src/components/dashboard/CreateArticleForm.tsx` | Store only the uploaded **filename** in `image`; no longer crashes when submitting without a cover (`imageUpRes?.url ?? "placeholder.png"`); empty `notes` defaults to `"—"` | Match the backend contract; backend requires non-empty `Notes` |
+| `src/components/dashboard/UpdateArticleForm.tsx` | Same filename-only contract; keep the existing image when no new file is uploaded; initial preview built via `getImageUrlFromPath`; empty `notes` defaults | Same as above |
+| `src/app/(commonLayout)/articles/[slug]/page.tsx` | Cover rendered via `getImageUrlFromPath(article.image)` | Was `src={article.image}` (a bare filename) — the image never displayed |
+| `next.config.ts` | `output: "standalone"`; `serverActions.allowedOrigins` (localhost + tunnel domains); `serverActions.bodySizeLimit: "15mb"`; trimmed `images.remotePatterns` to Unsplash | Slim Docker image; Server Actions must accept the gateway/tunnel origin (CSRF check) or login/create return 403; cover uploads go through a Server Action and the default 1 MB cap is too small |
+| `.env.example`, `Dockerfile`, `.dockerignore` | **New** | Standalone Next.js image + local-dev env template |
+
+### Backend (`backend/`)
+
+| File | Change | Why |
+|------|--------|-----|
+| `FrontierWeb/Program.cs` | CORS is now configurable via `Cors:AllowedOrigins` (comma-separated); default = allow any origin (demo). Was hard-coded to `http://localhost:5173` | That was the old Vite dev port; it blocked the real frontend. Behind the gateway everything is same-origin anyway |
+| `FrontierWeb/blog.db` | **Removed from the repo** | It was a **stale** SQLite file: its `Users` table had a flat `Role` column and **no** `Roles`/`Permissions`/`UserRoles` tables, so the current code (`AuthService` does `.Include(u => u.UserRoles)`) throws *"no such table"*. The DB is now created & seeded fresh on first run (`EnsureCreatedAsync` + `DataSeeder` → `admin`/`admin123` + a sample post) |
+| `Dockerfile`, `.dockerignore`, `docker-entrypoint.sh` | **New** | Multi-stage .NET build; entrypoint re-seeds the uploads volume with bundled images and keeps the DB on a volume |
+
+> No backend C# *business logic* was changed beyond CORS and dropping the stale DB file.
+
+### New orchestration files (repo root)
+
+`docker-compose.yml` · `gateway/Caddyfile` · `run.sh` · `.env.example` · `.gitignore`
+— these are additive and don't touch either app's source.
+
+---
+
+## Изменения для согласования фронта и бэка *(RU)*
+
+> **Для разработчиков фронта и бэка.** Репозитории делались независимо и
+> расходились в нескольких контрактах. Ниже — **все** правки для их связки,
+> по файлам. Бизнес-логику в остальном не трогали — изменения намеренно минимальны.
+
+### Главный контракт — поле `image` у поста
+
+- В `image` хранится **только имя файла** (например `abc123.jpg`). Бэк сохраняет
+  загрузки в `wwwroot/images/posts/` и отдаёт по `/images/posts/<имя>`. **URL для
+  показа строит фронт при рендере.** Раньше фронт записывал в `image` *полный*
+  URL — из-за этого адрес хоста «вшивался» в БД и ломалась страница статьи.
+
+### Фронтенд (`frontend/`)
+
+| Файл | Изменение | Зачем |
+|------|-----------|-------|
+| `src/lib/axios/httpClient.ts` | Базовый URL API берётся из серверной `API_INTERNAL_URL` (→ `http://backend:8080` в Docker), фолбэк на `NEXT_PUBLIC_API_BASE_URL`, затем `http://localhost:5160` | Клиент работает **только на сервере** (читает куки через `next/headers`) и должен ходить в бэк по внутренней сети, а не по браузерному адресу |
+| `src/lib/utils.ts` (`getImageUrlFromPath`) | По умолчанию возвращает **относительный** `/images/posts/<файл>` (можно переопределить `NEXT_PUBLIC_IMAGE_BASE_URL`); понимает уже-абсолютные URL и уже-корневые пути | Картинки грузит браузер; относительный URL резолвится против origin страницы (шлюз/туннель/домен) и не «зашивает» хост |
+| `src/components/dashboard/CreateArticleForm.tsx` | В `image` пишется только **имя файла**; больше не падает без обложки (`imageUpRes?.url ?? "placeholder.png"`); пустые `notes` → `"—"` | Соответствие контракту бэка; бэк требует непустое `Notes` |
+| `src/components/dashboard/UpdateArticleForm.tsx` | Тот же контракт «только имя файла»; без новой загрузки сохраняется прежняя картинка; превью строится через `getImageUrlFromPath`; пустые `notes` по умолчанию | То же |
+| `src/app/(commonLayout)/articles/[slug]/page.tsx` | Обложка рендерится через `getImageUrlFromPath(article.image)` | Было `src={article.image}` (голое имя файла) — картинка не показывалась |
+| `next.config.ts` | `output: "standalone"`; `serverActions.allowedOrigins` (localhost + домены туннелей); `serverActions.bodySizeLimit: "15mb"`; в `images.remotePatterns` оставлен только Unsplash | Компактный Docker-образ; Server Actions должны принимать origin шлюза/туннеля (защита от CSRF), иначе логин/создание дают 403; загрузка обложки идёт через Server Action, а лимит 1 МБ по умолчанию мал |
+| `.env.example`, `Dockerfile`, `.dockerignore` | **Новые** | Standalone-образ Next.js + шаблон env для локалки |
+
+### Бэкенд (`backend/`)
+
+| Файл | Изменение | Зачем |
+|------|-----------|-------|
+| `FrontierWeb/Program.cs` | CORS настраивается через `Cors:AllowedOrigins` (через запятую); по умолчанию — любой origin (демо). Было жёстко `http://localhost:5173` | Это старый порт Vite; он блокировал реальный фронт. За шлюзом всё равно один origin |
+| `FrontierWeb/blog.db` | **Удалён из репозитория** | Это **устаревшая** БД: в её `Users` была плоская колонка `Role` и **не было** таблиц `Roles`/`Permissions`/`UserRoles`, поэтому текущий код (`AuthService` делает `.Include(u => u.UserRoles)`) падал с *"no such table"*. Теперь БД создаётся и засеивается заново при старте (`EnsureCreatedAsync` + `DataSeeder` → `admin`/`admin123` + пример поста) |
+| `Dockerfile`, `.dockerignore`, `docker-entrypoint.sh` | **Новые** | Многостадийная сборка .NET; entrypoint досеивает том загрузок встроенными картинками и держит БД на томе |
+
+> Бизнес-логику бэка (C#) кроме CORS и удаления устаревшей БД не меняли.
+
+### Новые файлы оркестрации (корень репозитория)
+
+`docker-compose.yml` · `gateway/Caddyfile` · `run.sh` · `.env.example` · `.gitignore`
+— только добавлены, исходники приложений не затрагивают.
+
+---
+
 ## Prerequisites
 
 - **Docker** + **Docker Compose v2** (`docker compose`).
@@ -212,6 +298,86 @@ npm run dev                      # -> http://localhost:3000
 Here there is no gateway, so the frontend and backend are on different origins —
 that is exactly why `NEXT_PUBLIC_IMAGE_BASE_URL` must point at the backend for
 images to load.
+
+---
+
+## Поднять сервер самому — требования и шаги *(RU)*
+
+### Требования
+
+**Способ 1 — Docker (рекомендуется, всё одной командой):**
+- **Docker** + **Docker Compose v2** (`docker compose`);
+- ~несколько ГБ свободного места на диске и интернет (для первой сборки/скачивания образов);
+- свободный порт **8080** на хосте (меняется через `PORT` в `.env`);
+- *(опционально)* для публичной ссылки — `cloudflared`, `ngrok` или просто `ssh` (для localhost.run).
+
+**Способ 2 — без Docker (как в исходных репозиториях):**
+- **.NET 8 SDK** (бэкенд), **Node.js 20+** и npm (фронтенд).
+
+### Установка инструментов
+
+```bash
+# Arch / CachyOS
+sudo pacman -S docker docker-compose docker-buildx cloudflared
+sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER"      # затем перелогиниться, чтобы группа применилась
+
+# Ubuntu / Debian
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"
+
+# macOS / Windows — Docker Desktop: https://www.docker.com/products/docker-desktop/
+```
+
+> ⚠️ Если после установки `docker` служба не стартует с ошибкой про `iptables`/`PREROUTING`
+> — почти всегда помогает **перезагрузка** (так бывает, когда ядро обновлялось без ребута,
+> и netfilter-модули для текущего ядра не загружаются).
+
+### Запуск (Docker)
+
+```bash
+cd frontier
+cp .env.example .env          # необязательно — значения по умолчанию подходят для локалки
+./run.sh                      # сборка + старт всего стека, затем публичный туннель
+```
+
+Что делает `run.sh`: собирает и поднимает 3 контейнера (`docker compose up -d --build`),
+ждёт ответа на `http://localhost:8080`, затем открывает туннель.
+
+Варианты:
+```bash
+./run.sh --no-tunnel              # только локально, без туннеля
+./run.sh --tunnel localhost.run   # публичная ссылка без аккаунта/установки (через ssh)
+./run.sh --tunnel ngrok           # нужен бесплатный аккаунт ngrok
+./run.sh --logs                   # смотреть логи контейнеров
+./run.sh --down                   # остановить и удалить стек
+```
+
+Без скрипта: `docker compose up --build`, затем открыть `http://localhost:8080`.
+
+### Что получаем
+
+| URL | Что |
+|-----|-----|
+| `http://localhost:8080` | Публичный сайт (список статей + чтение) |
+| `http://localhost:8080/dashboard` | Админка — вход **`admin` / `admin123`** |
+| `http://localhost:8080/swagger` | Обзор API бэкенда |
+
+БД создаётся и засеивается при первом старте (пользователь `admin` + пост «Hello, world!»).
+
+### Данные и сброс
+
+Состояние живёт в Docker-томах (`backend-db` — БД, `backend-uploads` — загруженные картинки)
+и переживает перезапуск. Полный сброс к чистому состоянию:
+```bash
+docker compose down -v
+```
+
+### Запуск без Docker
+
+См. англоязычный раздел **“Running without Docker (local dev)”** выше: бэк — `dotnet run`
+в `backend/FrontierWeb` (→ `:5160`), фронт — `npm install && npm run dev` в `frontend`
+(→ `:3000`), при этом в `frontend/.env` укажи `NEXT_PUBLIC_IMAGE_BASE_URL=http://localhost:5160`.
 
 ---
 
