@@ -122,9 +122,13 @@ namespace FrontierWeb.Infrastructure
 
         public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
         {
+            // Soft delete: the post is marked Deleted = true rather than being
+            // removed from the database. The global query filter then hides it
+            // from all reads (List/Get/uniqueness checks).
             var post = await _db.Posts.FirstOrDefaultAsync(p => p.Id == id, ct);
             if (post is null) return false;
-            _db.Posts.Remove(post);
+            post.Deleted = true;
+            post.UpdatedAtUtc = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
             return true;
         }

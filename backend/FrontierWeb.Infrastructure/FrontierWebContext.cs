@@ -16,9 +16,17 @@ namespace FrontierWeb.Infrastructure
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<Post>()
-                .HasIndex(p => p.Slug)
-                .IsUnique();
+            modelBuilder.Entity<Post>(b =>
+            {
+                // Soft-deleted posts are transparently excluded from every query.
+                b.HasQueryFilter(p => !p.Deleted);
+
+                // Slug stays unique only among non-deleted posts, so a slug freed
+                // by a soft-delete can be reused by a new post.
+                b.HasIndex(p => p.Slug)
+                    .IsUnique()
+                    .HasFilter("\"Deleted\" = 0");
+            });
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Username)

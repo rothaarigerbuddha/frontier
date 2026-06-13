@@ -26,6 +26,10 @@ namespace FrontierWeb.Domain.Entities
 
         public bool Published { get; set; } = true;
 
+        // Soft-delete flag. When true the post is considered deleted but the
+        // row is kept in the database (set by DeleteAsync instead of a hard delete).
+        public bool Deleted { get; set; } = false;
+
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
     }
